@@ -102,19 +102,12 @@ Array!Instruction parse(string source) {
         Instruction prevJump = result[toModify];
         assert(prevJump.opcode == Opcode.JumpZ);
         assert(prevJump.jumpTarget == 0xdeadbeef);
-        prevJump.jumpTarget = result.length;
+        prevJump.jumpTarget = result.length + 1;
         result[toModify] = prevJump;
 
         result.insertBack(
             Instruction(Opcode.JumpNZ,
-              Operand.None(), Operand.MemReg(0), toModify));
-
-        // This generates jumps to jump instructions, which is useless,
-        // technically. However, this setup is convenient for codegen, and
-        // doesn't mean we generate worse code. The target of every jump is a
-        // jump instruction, which makes it easy to generate labels during
-        // codegen. We avoid useless computation by putting the label after the
-        // code for evaluating the condition.
+              Operand.None(), Operand.MemReg(0), toModify + 1));
         break;
       default:
         // ignore
