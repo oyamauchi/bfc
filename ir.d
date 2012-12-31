@@ -4,8 +4,9 @@
  */
 
 import std.container;
-
+import std.outbuffer;
 import std.stdio;
+import std.string;
 
 enum Opcode {
   Add,     // Adds src to dest
@@ -122,3 +123,48 @@ Array!Instruction parse(string source) {
   assert(jumpTargets.empty());
   return result;
 }
+
+string printOperand(Operand op) {
+  switch (op.kind) {
+    case OperandKind.Const:    return format("%d", op.number);
+    case OperandKind.Reg:      return format("r%d", op.number);
+    case OperandKind.MemConst: return format("[%d]", op.number);
+    case OperandKind.MemReg:   return format("[r%d]", op.number);
+    default:                   assert(false);
+  }
+}
+
+void printInstructions(Array!Instruction instrs, OutBuffer buf, ulong start) {
+  foreach (Instruction instr; instrs) {
+    buf.write(format("%4d  ", start));
+    start++;
+
+    switch (instr.opcode) {
+      case Opcode.Add:
+        buf.write(format("Add %s, %s\n", printOperand(instr.dest),
+              printOperand(instr.src)));
+        break;
+      case Opcode.Sub:
+        buf.write(format("Sub %s, %s\n", printOperand(instr.dest),
+              printOperand(instr.src)));
+        break;
+      case Opcode.Putchar:
+        buf.write(format("Putchar %s\n", printOperand(instr.src)));
+        break;
+      case Opcode.Getchar:
+        buf.write(format("%s = Getchar\n", printOperand(instr.dest)));
+        break;
+      case Opcode.JumpZ:
+        buf.write(format("JumpZ %s, %d\n", printOperand(instr.src),
+              instr.jumpTarget));
+        break;
+      case Opcode.JumpNZ:
+        buf.write(format("JumpNZ %s, %d\n", printOperand(instr.src),
+              instr.jumpTarget));
+        break;
+      default:
+        assert(false);
+    }
+  }
+}
+
