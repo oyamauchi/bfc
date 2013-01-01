@@ -49,7 +49,8 @@ struct Instruction {
   Opcode opcode;
   Operand dest;
   Operand src;
-  ulong jumpTarget;
+  ulong jumpTaken;
+  ulong jumpNotTaken;
 }
 
 
@@ -90,7 +91,7 @@ Array!Instruction parse(string source) {
         ulong toModify = result.length;
         result.insertBack(
             Instruction(Opcode.JumpZ,
-              Operand.None(), Operand.MemReg(0), 0xdeadbeef));
+              Operand.None(), Operand.MemReg(0), 0xdeadbeef, toModify + 1));
         jumpTargets.insertFront(toModify);
         break;
       case ']':
@@ -101,13 +102,13 @@ Array!Instruction parse(string source) {
 
         Instruction prevJump = result[toModify];
         assert(prevJump.opcode == Opcode.JumpZ);
-        assert(prevJump.jumpTarget == 0xdeadbeef);
-        prevJump.jumpTarget = result.length + 1;
+        assert(prevJump.jumpTaken == 0xdeadbeef);
+        prevJump.jumpTaken = result.length + 1;
         result[toModify] = prevJump;
 
         result.insertBack(
             Instruction(Opcode.JumpNZ,
-              Operand.None(), Operand.MemReg(0), toModify + 1));
+              Operand.None(), Operand.MemReg(0), toModify + 1, result.length + 1));
         break;
       default:
         // ignore
@@ -148,12 +149,12 @@ void printInstructions(Array!Instruction instrs, OutBuffer buf, ulong start) {
         buf.write(format("%s = Getchar\n", printOperand(instr.dest)));
         break;
       case Opcode.JumpZ:
-        buf.write(format("JumpZ %s, %d\n", printOperand(instr.src),
-              instr.jumpTarget));
+        buf.write(format("JumpZ %s -> %d else %d\n", printOperand(instr.src),
+              instr.jumpTaken, instr.jumpNotTaken));
         break;
       case Opcode.JumpNZ:
-        buf.write(format("JumpNZ %s, %d\n", printOperand(instr.src),
-              instr.jumpTarget));
+        buf.write(format("JumpNZ %s -> %d else %d\n", printOperand(instr.src),
+              instr.jumpTaken, instr.jumpNotTaken));
         break;
       default:
         assert(false);

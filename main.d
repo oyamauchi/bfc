@@ -1,6 +1,7 @@
 
 import codegen;
 import ir;
+import optimize.cfg;
 
 import std.container;
 import std.outbuffer;
@@ -33,16 +34,29 @@ void codegenC(string source, ref OutBuffer buf) {
   buf.write("}\n");
 }
 
+enum OutputFormat {
+  x86, c, ir
+}
+
+void usage(string progname) {
+  writefln("Usage: %s [flags] <file.bf>", progname);
+  writeln("Flags:");
+  writeln("  --output=<format>    'x86' (default), 'c' or 'ir'");
+}
+
 int main(string[] argv) {
-  bool outputC = false;
-  getopt(argv,
-      "c", &outputC
-      );
+  OutputFormat outputFormat = OutputFormat.x86;
+  try {
+    getopt(argv,
+        "output", &outputFormat
+        );
+  } catch {
+    usage(argv[0]);
+    return 0;
+  }
 
   if (argv.length != 2) {
-    writefln("Usage: %s [flags] <file.bf>", argv[0]);
-    writeln("Flags:");
-    writeln("  --c    Output C code instead of assembly");
+    usage(argv[0]);
     return 0;
   }
 
@@ -50,13 +64,26 @@ int main(string[] argv) {
   string source = cast(string) read(filename);
   OutBuffer buf = new OutBuffer();
 
-  if (outputC) {
+  if (outputFormat == OutputFormat.c) {
     codegenC(source, buf);
     write(buf.toString());
     return 0;
   }
 
   Array!Instruction instrs = parse(source);
+  OffsetToBBMap map = BasicBlock.createBBMap(instrs);
+
+  if (outputFormat == OutputFormat.ir) {
+    foreach (ulong id; map.byKey()) {
+      OutBuffer bbuf = new OutBuffer();
+      writef("%d:\n", id);
+      printInstructions(map[id].instrs, bbuf, id);
+      write(bbuf.toString());
+      write("\n");
+    }
+    return 0;
+  }
+
   codegenInstructions(instrs, buf);
   write(buf.toString());
 

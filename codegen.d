@@ -80,7 +80,7 @@ void codegenInstructions(Array!Instruction instrs, ref OutBuffer buf) {
         string op = (instr.opcode == Opcode.JumpZ ? "jz" : "jnz");
         buf.write(format("  movb %s, %%r10b\n", codegenOperand(instr.src)));
         buf.write(       "  test %r10b, %r10b\n");
-        buf.write(format("  %s L%d\n", op, instr.jumpTarget));
+        buf.write(format("  %s L%d\n", op, instr.jumpTaken));
         buf.write(format("L%d:\n", idx + 1));
         break;
       default:
