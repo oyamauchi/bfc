@@ -1,5 +1,8 @@
 
-ALL_FILES      := $(wildcard *.d)
+ROOT_FILES     := $(wildcard *.d)
+OPTIMIZE_FILES := $(wildcard optimize/*.d)
+ALL_FILES      := $(ROOT_FILES) $(OPTIMIZE_FILES)
+
 INTERP_FILES   := interp.d
 COMPILER_FILES := $(filter-out $(INTERP_FILES),$(ALL_FILES))
 
