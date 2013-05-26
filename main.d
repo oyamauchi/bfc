@@ -2,7 +2,6 @@
 import codegen;
 import ir;
 import optimize.cfg;
-import optimize.constprop;
 
 import std.container;
 import std.conv;
@@ -72,9 +71,8 @@ int main(string[] argv) {
     return 0;
   }
 
-  Array!Instruction instrs = parse(source);
+  Array!Instr instrs = parse(source);
   OffsetToBBMap map = BasicBlock.createBBMap(instrs);
-  constantPropagate(map[0]);
 
   if (outputFormat == OutputFormat.ir) {
     foreach (ulong id; map.byKey()) {
@@ -87,8 +85,8 @@ int main(string[] argv) {
     return 0;
   }
 
-  codegenInstructions(instrs, buf);
-  write(buf.toString());
+  //  codegenInstructions(instrs, buf);
+  //  write(buf.toString());
 
   return 0;
 }

@@ -15,7 +15,7 @@ alias BasicBlock[ulong] OffsetToBBMap;
  */
 class BasicBlock {
   ulong id;
-  Array!Instruction instrs;
+  Array!Instr instrs;
   Array!ulong successors;
   Array!ulong predecessors;
 
@@ -30,7 +30,7 @@ class BasicBlock {
    * immediately after another jump instruction. This means we only need to cut
    * off BBs at jump instructions, without worrying about mid-BB entries.
    */
-  static OffsetToBBMap createBBMap(Array!Instruction instrs) {
+  static OffsetToBBMap createBBMap(Array!Instr instrs) {
     OffsetToBBMap result;
 
     BasicBlock curr = new BasicBlock();
@@ -52,13 +52,14 @@ class BasicBlock {
     // Last block
     result[curr.id] = curr;
 
+    /*
     // Compute predecessors, now that the forward CFG is complete
     foreach (BasicBlock bb; result) {
       foreach (ulong succ; bb.successors) {
         result[succ].predecessors.insertBack(bb.id);
       }
     }
-
+    */
     return result;
   }
 }

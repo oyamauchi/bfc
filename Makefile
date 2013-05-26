@@ -17,4 +17,4 @@ bfc: $(COMPILER_FILES)
 
 .PHONY: clean
 clean:
-	-rm *.o bfc bfi
+	-rm -f *.o bfc bfi
