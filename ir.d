@@ -19,7 +19,7 @@ enum Opcode {
   JumpZ,   // If src is zero, jumps to jumpTarget
   JumpNZ,  // If src is nonzero, jumps to jumpTarget
 
-  Zeros,   // Special opcode which defines the pointer register
+  Merge,   // Special opcode which captures predecessor variables
 }
 
 bool opcodeHasDest(Opcode op) {
@@ -28,7 +28,7 @@ bool opcodeHasDest(Opcode op) {
   case Opcode.Add:
   case Opcode.Sub:
   case Opcode.Getchar:
-  case Opcode.Zeros:
+  case Opcode.Merge:
     return true;
   default:
     return false;
@@ -38,7 +38,7 @@ bool opcodeHasDest(Opcode op) {
 ulong opcodeSourceCount(Opcode op) {
   switch (op) {
   case Opcode.Getchar:
-  case Opcode.Zeros:
+  case Opcode.Merge: // XXX
     return 0;
   case Opcode.Add:
   case Opcode.Sub:
@@ -59,7 +59,7 @@ string opcodeName(Opcode op) {
   case Opcode.Getchar: return "Getchar";
   case Opcode.JumpZ:   return "JumpZ";
   case Opcode.JumpNZ:  return "JumpNZ";
-  case Opcode.Zeros:   return "Zeros";
+  case Opcode.Merge:   return "Merge";
   }
 }
 
@@ -90,45 +90,70 @@ struct Instr {
   Opcode opcode;
   Temp* dest;
   Temp* srcs[];
-  ulong jumpTaken;
-  ulong jumpNotTaken;
+}
+
+class BasicBlock {
+  ulong id;
+  Array!Instr instrs;
+  Temp* ptrAtExit;
+
+  BasicBlock successors[2];
+
+  this(ulong id) {
+    this.id = id;
+  }
+
+  void print(OutBuffer buf) {
+    buf.write(format("%d:\n", id));
+    foreach (Instr instr; instrs) {
+      buf.write("    ");
+      if (opcodeHasDest(instr.opcode)) {
+        buf.write(format("t%d = ", instr.dest.tmpNum));
+      }
+
+      buf.write(format("%s", opcodeName(instr.opcode)));
+
+      foreach (ulong i; 0..opcodeSourceCount(instr.opcode)) {
+        if (instr.srcs[i].isConst) {
+          buf.write(format(" %d", instr.srcs[i].tmpNum));
+        } else {
+          buf.write(format(" t%d", instr.srcs[i].tmpNum));
+        }
+      }
+
+      buf.write("\n");
+    }
+
+    if (successors[0]) {
+      buf.write(format("     -> %d  -> %d", successors[0].id, successors[1].id));
+    }
+
+    buf.write("\n\n");
+  }
 }
 
 class Builder {
-  Array!Instr m_instrs;
+  BasicBlock block;
+
+  this(ulong blockId) {
+    block = new BasicBlock(blockId);
+  }
 
   Temp* append(Opcode op, Temp* srcs[]) {
-    Temp* dst = Temp.newTemp();
+    Temp* dst = (opcodeHasDest(op) ? Temp.newTemp() : null);
     Instr i = Instr(op, dst, srcs);
-    m_instrs.insertBack(i);
+    block.instrs.insertBack(i);
     return dst;
-  }
-  void appendJump(Opcode op, Temp* src, ulong taken, ulong notTaken) {
-    Instr i = Instr(op, null, [src], taken, notTaken);
-    m_instrs.insertBack(i);
   }
 }
 
+BasicBlock parseBasicBlock(string source, ulong idx) {
+  Builder b = new Builder(idx);
+  auto ptrVal = (idx == 0
+                 ? Temp.newConst(0)
+                 : b.append(Opcode.Merge, []));
 
-Array!Instr parse(string source) {
-  SList!ulong jumpStack;
-  ulong[ulong] jumpTargets;
-
-  foreach (ulong i; 0..source.length) {
-    if (source[i] == '[') {
-      jumpStack.insertFront(i);
-    } else if (source[i] == ']') {
-      auto from = jumpStack.front();
-      jumpStack.removeFront();
-      jumpTargets[from] = i;
-      jumpTargets[i] = from;
-    }
-  }
-
-  Builder b = new Builder();
-  auto ptrVal = b.append(Opcode.Zeros, []);
-
-  foreach (ulong i; 0..source.length) {
+  foreach (ulong i; idx..source.length) {
     switch (source[i]) {
       case '<':
         ptrVal = b.append(Opcode.Sub, [ptrVal, Temp.newConst(1)]);
@@ -140,67 +165,66 @@ Array!Instr parse(string source) {
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
         auto subRes  = b.append(Opcode.Sub, [loadRes, Temp.newConst(1)]);
         b.append(Opcode.Store, [ptrVal, subRes]);
+        break;
       }
-      break;
       case '+': {
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
         auto addRes  = b.append(Opcode.Add, [loadRes, Temp.newConst(1)]);
         b.append(Opcode.Store, [ptrVal, addRes]);
+        break;
       }
-      break;
       case '.': {
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
         b.append(Opcode.Putchar, [loadRes]);
+        break;
       }
-      break;
       case ',': {
         auto getRes = b.append(Opcode.Getchar, []);
         b.append(Opcode.Store, [ptrVal, getRes]);
+        break;
       }
-      break;
-      case '[':
-        // If the mem cell at the current pointer is zero, jump to the
-        // corresponding close bracket. We don't know where that is yet, so put
-        // an entry in the queue.
+
+      case '[': {
+        int openCount = 1;
+        ulong afterIdx;
+        foreach (j; i + 1..source.length) {
+          if (openCount == 0) {
+            afterIdx = j;
+            break;
+          }
+          if (source[j] == '[') {
+            openCount++;
+          } else if (source[j] == ']') {
+            openCount--;
+          }
+        }
+
+        // j is the index we have to jump to
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
-        b.appendJump(Opcode.JumpZ, loadRes, jumpTargets[i], i + 1);
-        break;
-      case ']':
-        // If the mem cell at the current pointer is nonzero, jump to the
-        // corresponding open bracket: the head of the jump-target stack.
+        b.append(Opcode.JumpZ, [loadRes]);
+        auto taken = parseBasicBlock(source, afterIdx);
+        auto notTaken = parseBasicBlock(source, i + 1);
+
+        assert(notTaken.successors[1] is null);
+        notTaken.successors[1] = taken;
+        b.block.successors[0] = taken;
+        b.block.successors[1] = notTaken;
+        return b.block;
+      }
+
+      case ']': {
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
-        b.appendJump(Opcode.JumpNZ, loadRes, jumpTargets[i], i + 1);
-        break;
+        b.append(Opcode.JumpNZ, [loadRes]);
+        b.block.successors[0] = b.block;
+        return b.block;
+      }
+
       default:
         // ignore
+        break;
     }
   }
 
-  return b.m_instrs;
-}
-
-void printInstructions(Array!Instr instrs, OutBuffer buf, ulong start) {
-  foreach (Instr instr; instrs) {
-    buf.write(format("%4d  ", start));
-    start++;
-
-    if (opcodeHasDest(instr.opcode)) {
-      buf.write(format("t%d = ", instr.dest.tmpNum));
-    }
-
-    buf.write(format("%s", opcodeName(instr.opcode)));
-
-    foreach (ulong i; 0..opcodeSourceCount(instr.opcode)) {
-      if (instr.srcs[i].isConst) {
-        buf.write(format(" %d", instr.srcs[i].tmpNum));
-      } else {
-        buf.write(format(" t%d", instr.srcs[i].tmpNum));
-      }
-    }
-
-    if (instr.opcode == Opcode.JumpZ || instr.opcode == Opcode.JumpNZ) {
-      buf.write(format(" -> %d", instr.jumpTaken));
-    }
-    buf.write("\n");
-  }
+  // This means we've reached the end of the source.
+  return b.block;
 }

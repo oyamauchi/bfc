@@ -1,7 +1,6 @@
 
 import codegen;
 import ir;
-import optimize.cfg;
 
 import std.container;
 import std.conv;
@@ -71,22 +70,34 @@ int main(string[] argv) {
     return 0;
   }
 
-  Array!Instr instrs = parse(source);
-  OffsetToBBMap map = BasicBlock.createBBMap(instrs);
+  auto root = parseBasicBlock(source, 0);
 
   if (outputFormat == OutputFormat.ir) {
-    foreach (ulong id; map.byKey()) {
-      OutBuffer bbuf = new OutBuffer();
-      writef("%d:\n", id);
-      printInstructions(map[id].instrs, bbuf, id);
-      write(bbuf.toString());
-      write("\n");
+    DList!BasicBlock queue;
+    bool[ulong] visited;
+    OutBuffer bbuf = new OutBuffer();
+    queue.insertBack(root);
+
+    while (!queue.empty) {
+      auto block = queue.front();
+      queue.removeFront();
+
+      if (block.id in visited) {
+        continue;
+      }
+      visited[block.id] = true;
+      block.print(bbuf);
+      if (block.successors[0]) {
+        queue.insertBack(block.successors[0]);
+      }
+      if (block.successors[1]) {
+        queue.insertBack(block.successors[1]);
+      }
     }
+
+    write(bbuf.toString());
     return 0;
   }
-
-  //  codegenInstructions(instrs, buf);
-  //  write(buf.toString());
 
   return 0;
 }
