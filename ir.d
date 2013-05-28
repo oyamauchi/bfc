@@ -113,6 +113,11 @@ class BasicBlock {
     return dst;
   }
 
+  void nopOut(ulong offset) {
+    Instr newInst = Instr(Opcode.Nop, null, []);
+    instrs[offset] = newInst;
+  }
+
   void print(OutBuffer buf) {
     buf.write(format("%d:\n", id));
     foreach (Instr instr; instrs) {

@@ -96,14 +96,14 @@ int main(string[] argv) {
       eliminateDeadCode(block);
 
       block.print(bbuf);
-      /*
+
       LiveRangeMap liveRanges = computeLiveRanges(block);
       RegMap regs = allocateRegs(block, liveRanges);
       foreach (temp; regs.keys) {
         writefln("%s -> %s", temp.tmpNum,
                  to!string(regs[temp]));
       }
-      */
+
       if (block.successors[0]) {
         queue.insertBack(block.successors[0]);
       }

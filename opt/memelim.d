@@ -19,14 +19,17 @@ import ir;
  */
 void eliminateRedundantLoads(BasicBlock b) {
   Temp*[Temp*] replaceMap;
-  Temp*[ulong] savedStores;
+  // Pretty sure these could be the same map but I'm not good enough at D
+  Temp*[ulong] savedConstStores; // maps address to value
+  Temp*[ulong] savedVarStores; // maps temp number to value
 
-  foreach (inst; b.instrs) {
+  foreach (i; 0..b.instrs.length) {
+    auto inst = b.instrs[i];
     // Now just do all the replacements.
-    foreach (i; 0..inst.srcs.length) {
-      auto mapEntry = inst.srcs[i] in replaceMap;
+    foreach (j; 0..inst.srcs.length) {
+      auto mapEntry = inst.srcs[j] in replaceMap;
       if (mapEntry) {
-        inst.srcs[i] = *mapEntry;
+        inst.srcs[j] = *mapEntry;
       }
     }
 
@@ -34,20 +37,26 @@ void eliminateRedundantLoads(BasicBlock b) {
     if (inst.opcode == Opcode.Store) {
       auto addr = inst.srcs[0];
       if (addr.isConst) {
-        savedStores[addr.tmpNum] = inst.srcs[1];
+        savedConstStores[addr.tmpNum] = inst.srcs[1];
       } else {
-        // If the store is to a variable address, we're hosed; it could have
-        // been to anywhere, so we have to forget all we know.
-        savedStores.clear();
+        savedConstStores.clear();
+        savedVarStores[addr.tmpNum] = inst.srcs[1];
       }
     }
 
     if (inst.opcode == Opcode.Load) {
       auto addr = inst.srcs[0];
       if (addr.isConst) {
-        auto replacement = addr.tmpNum in savedStores;
+        auto replacement = addr.tmpNum in savedConstStores;
         if (replacement) {
           replaceMap[inst.dest] = *replacement;
+          b.nopOut(i);
+        }
+      } else {
+        auto replacement = addr.tmpNum in savedVarStores;
+        if (replacement) {
+          replaceMap[inst.dest] = *replacement;
+          b.nopOut(i);
         }
       }
     }
@@ -61,7 +70,9 @@ void eliminateRedundantLoads(BasicBlock b) {
  */
 void eliminateRedundantStores(BasicBlock b) {
   // Maps memory address to temp later stored there.
-  bool[ulong] overwrittenLater;
+  bool[ulong] overwriteConstMap;
+  // Maps temp number to temp later stored there.
+  bool[ulong] overwriteVarMap;
 
   // Overflow, jesus.
   for (ulong i = b.instrs.length - 1; i < b.instrs.length; --i) {
@@ -69,28 +80,29 @@ void eliminateRedundantStores(BasicBlock b) {
     if (inst.opcode == Opcode.Store) {
       if (inst.srcs[0].isConst) {
         // Is this going to get overwritten later?
-        if (inst.srcs[0].tmpNum in overwrittenLater) {
+        if (inst.srcs[0].tmpNum in overwriteConstMap) {
           // Eliminate this one.
-          Instr newInst = Instr(Opcode.Nop, null, []);
-          b.instrs[i] = newInst;
+          b.nopOut(i);
         } else {
           // This one will take over.
-          overwrittenLater[inst.srcs[0].tmpNum] = true;
+          overwriteConstMap[inst.srcs[0].tmpNum] = true;
         }
       } else {
-        // Variable store. We have to forget everything.
-        overwrittenLater.clear();
+        if (inst.srcs[0].tmpNum in overwriteVarMap) {
+          b.nopOut(i);
+        } else {
+          overwriteConstMap.clear();
+          overwriteVarMap[inst.srcs[0].tmpNum] = true;
+        }
       }
     }
 
     if (inst.opcode == Opcode.Load) {
+      // Going backward from here, stores to this address are no longer redundant.
       if (inst.srcs[0].isConst) {
-        // XXX Gotta do this, man. Doesn't matter now because we always remove
-        // loads first.
-        //        overwrittenLater.remove(inst.srcs[0].tmpNum);
+        overwriteConstMap.remove(inst.srcs[0].tmpNum);
       } else {
-        // Variable load. No screwing around with memory before this.
-        overwrittenLater.clear();
+        overwriteVarMap.remove(inst.srcs[0].tmpNum);
       }
     }
   }
