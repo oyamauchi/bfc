@@ -96,14 +96,12 @@ int main(string[] argv) {
 
       LiveRangeMap liveRanges = computeLiveRanges(block);
       RegMap regs = allocateRegs(block, liveRanges);
-      /*
-      foreach (temp; regs.keys) {
-        writefln("%s -> %s", temp.tmpNum,
-                 to!string(regs[temp]));
-      }
-      */
 
       if (outputFormat == OutputFormat.ir) {
+        foreach (temp; regs.keys) {
+          writefln("%s -> %s", temp.tmpNum,
+                   to!string(regs[temp]));
+        }
         block.print(bbuf);
       } else {
         codegenBlock(block, regs, bbuf);

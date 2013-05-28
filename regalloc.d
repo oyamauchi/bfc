@@ -50,11 +50,12 @@ LiveRangeMap computeLiveRanges(BasicBlock b) {
         continue;
       }
 
-      auto srcRange = src in map;
-      if (srcRange) {
-        (*srcRange)[1] = cast(long) i;
-      }
+      map[src][1] = cast(long) i;
     }
+  }
+
+  if (b.ptrAtExit && !b.ptrAtExit.isConst) {
+    map[b.ptrAtExit][1] = b.instrs.length;
   }
 
   return map;

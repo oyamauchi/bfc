@@ -37,6 +37,7 @@ string[2] codegenIntroOutro() {
   buf.write("  call _calloc\n");
   buf.write("  mov %rax, %" ~ memBaseReg ~ "\n");
 
+  outroBuf.write("Lend:\n");
   outroBuf.write("  popq %" ~ memBaseReg ~ "\n");
   foreach (regName; calleeSavedPops) {
     outroBuf.write("  popq %" ~ regName ~ "\n");
@@ -182,5 +183,9 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
         // harp darp
         break;
     }
+  }
+
+  if (!b.successors[0]) {
+    buf.write("  jmp Lend\n");
   }
 }
