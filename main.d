@@ -45,13 +45,16 @@ void usage(string progname) {
   writefln("Usage: %s [flags] <file.bf>", progname);
   writeln("Flags:");
   writeln("  --output=<format>    'x86' (default), 'c' or 'ir'");
+  writeln("  --no-opt             turn optimizations off");
 }
 
 int main(string[] argv) {
   OutputFormat outputFormat = OutputFormat.x86;
+  bool noOpts = false;
   try {
     getopt(argv,
-        "output", &outputFormat
+           "output", &outputFormat,
+           "no-opt", &noOpts
         );
   } catch {
     usage(argv[0]);
@@ -90,9 +93,11 @@ int main(string[] argv) {
       }
       visited[block.id] = true;
 
-      eliminateRedundantLoads(block);
-      eliminateRedundantStores(block);
-      eliminateDeadCode(block);
+      if (!noOpts) {
+        eliminateRedundantLoads(block);
+        eliminateRedundantStores(block);
+        eliminateDeadCode(block);
+      }
 
       LiveRangeMap liveRanges = computeLiveRanges(block);
       RegMap regs = allocateRegs(block, liveRanges);
