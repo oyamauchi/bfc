@@ -103,6 +103,13 @@ class BasicBlock {
     this.id = id;
   }
 
+  Temp* append(Opcode op, Temp* srcs[]) {
+    Temp* dst = (opcodeHasDest(op) ? Temp.newTemp() : null);
+    Instr i = Instr(op, dst, srcs);
+    instrs.insertBack(i);
+    return dst;
+  }
+
   void print(OutBuffer buf) {
     buf.write(format("%d:\n", id));
     foreach (Instr instr; instrs) {
@@ -132,29 +139,82 @@ class BasicBlock {
   }
 }
 
-class Builder {
-  BasicBlock block;
+class Parser {
+  string source;
 
-  this(ulong blockId) {
-    block = new BasicBlock(blockId);
+  // A mapping from bracket-index to target-index. That is, the keys will always
+  // point to brackets, and the values will always point to positions
+  // immediately after brackets.
+  ulong[ulong] jumpTargets;
+
+  // A mapping from block-start to block itself. The keys will always points to
+  // positions immediately after brackets.
+  BasicBlock[ulong] offsetMap;
+
+  this(string source) {
+    this.source = source;
+
+    SList!ulong jumpStack;
+    foreach (i; 0..source.length) {
+      if (source[i] == '[') {
+        jumpStack.insertFront(i);
+      } else if (source[i] == ']') {
+        // Unbalanced brackets if this fires. TODO: error, not assert
+        assert(!jumpStack.empty);
+
+        auto start = jumpStack.front();
+        jumpStack.removeFront();
+        jumpTargets[i] = start + 1;
+        jumpTargets[start] = i + 1;
+      }
+    }
+
+    // Unbalanced brackets if this fires. TODO: error, not assert
+    assert(jumpStack.empty);
   }
 
-  Temp* append(Opcode op, Temp* srcs[]) {
-    Temp* dst = (opcodeHasDest(op) ? Temp.newTemp() : null);
-    Instr i = Instr(op, dst, srcs);
-    block.instrs.insertBack(i);
-    return dst;
+  BasicBlock parse() {
+    ulong[BasicBlock] blockEnds;
+
+    BasicBlock first = new BasicBlock(0);
+    ulong idx = parseBasicBlock(first, 0);
+    offsetMap[0] = first;
+    blockEnds[first] = idx;
+
+    while (idx < source.length) {
+      // idx now points to a bracket
+      BasicBlock b = new BasicBlock(idx + 1);
+      ulong end = parseBasicBlock(b, idx + 1);
+      offsetMap[idx + 1] = b;
+
+      // Record where this block ends, so that we can look up the jump targets
+      // later, after all blocks are parsed.
+      blockEnds[b] = end;
+
+      idx = end;
+    }
+
+    // Populate each block's successors. Look up the jump target, keyed by where
+    // the block ended.
+    foreach (b; blockEnds.keys) {
+      if (blockEnds[b] < source.length) {
+        // Fall through
+        b.successors[0] = offsetMap[blockEnds[b] + 1];
+        // Taken jump
+        b.successors[1] = offsetMap[jumpTargets[blockEnds[b]]];
+      }
+    }
+
+    return first;
   }
-}
 
-BasicBlock parseBasicBlock(string source, ulong idx) {
-  Builder b = new Builder(idx);
-  auto ptrVal = (idx == 0
-                 ? Temp.newConst(0)
-                 : b.append(Opcode.Merge, []));
+  private ulong parseBasicBlock(BasicBlock b, ulong start) {
+    auto ptrVal = (start == 0
+                   ? Temp.newConst(0)
+                   : b.append(Opcode.Merge, []));
 
-  foreach (ulong i; idx..source.length) {
-    switch (source[i]) {
+    foreach (ulong i; start..source.length) {
+      switch (source[i]) {
       case '<':
         ptrVal = b.append(Opcode.Sub, [ptrVal, Temp.newConst(1)]);
         break;
@@ -185,46 +245,24 @@ BasicBlock parseBasicBlock(string source, ulong idx) {
       }
 
       case '[': {
-        int openCount = 1;
-        ulong afterIdx;
-        foreach (j; i + 1..source.length) {
-          if (openCount == 0) {
-            afterIdx = j;
-            break;
-          }
-          if (source[j] == '[') {
-            openCount++;
-          } else if (source[j] == ']') {
-            openCount--;
-          }
-        }
-
-        // j is the index we have to jump to
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
         b.append(Opcode.JumpZ, [loadRes]);
-        auto taken = parseBasicBlock(source, afterIdx);
-        auto notTaken = parseBasicBlock(source, i + 1);
-
-        assert(notTaken.successors[1] is null);
-        notTaken.successors[1] = taken;
-        b.block.successors[0] = taken;
-        b.block.successors[1] = notTaken;
-        return b.block;
+        return i;
       }
 
       case ']': {
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
         b.append(Opcode.JumpNZ, [loadRes]);
-        b.block.successors[0] = b.block;
-        return b.block;
+        return i;
       }
 
       default:
         // ignore
         break;
+      }
     }
-  }
 
-  // This means we've reached the end of the source.
-  return b.block;
+    // This means we've reached the end of the source.
+    return source.length;
+  }
 }

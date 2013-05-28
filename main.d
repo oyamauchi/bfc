@@ -71,7 +71,8 @@ int main(string[] argv) {
     return 0;
   }
 
-  auto root = parseBasicBlock(source, 0);
+  Parser p = new Parser(source);
+  auto root = p.parse();
 
   if (outputFormat == OutputFormat.ir) {
     DList!BasicBlock queue;
