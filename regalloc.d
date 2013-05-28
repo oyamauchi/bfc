@@ -7,23 +7,22 @@ import ir;
 import std.traits;
 
 // These are best callee-saved.
-immutable string memBase = "r15";
-immutable string ptr = "rbx";
+immutable string memBaseReg = "r15";
 
 enum Reg {
+  rbx,
+  //  r10, scratch
+  r11,
+  r12,
+  r13,
+  r14,
   rax,
-  // rbx reserved
   rcx,
   rdx,
   rsi,
   rdi,
   r8,
   r9,
-  r10,
-  r11,
-  r12,
-  r13,
-  r14,
   // r15 reserved
 }
 
@@ -120,8 +119,24 @@ RegMap allocateRegs(BasicBlock b, LiveRangeMap liveRanges) {
   return map;
 }
 
+string byteRegName(Reg r) {
+  final switch (r) {
+    case Reg.rax: return "%al";
+    case Reg.rbx: return "%bl";
+    case Reg.rcx: return "%cl";
+    case Reg.rdx: return "%dl";
+    case Reg.rsi: return "%sil";
+    case Reg.rdi: return "%dil";
+    case Reg.r8:  return "%r8b";
+    case Reg.r9:  return "%r9b";
+    case Reg.r11: return "%r11b";
+    case Reg.r12: return "%r12b";
+    case Reg.r13: return "%r13b";
+    case Reg.r14: return "%r14b";
+  }
+}
 
-private bool regIsCallerSaved(Reg r) {
+bool regIsCallerSaved(Reg r) {
   switch (r) {
     case Reg.rax:
     case Reg.rcx:

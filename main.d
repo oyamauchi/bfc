@@ -76,7 +76,6 @@ int main(string[] argv) {
   Parser p = new Parser(source);
   auto root = p.parse();
 
-  if (outputFormat == OutputFormat.ir) {
     DList!BasicBlock queue;
     bool[ulong] visited;
     OutBuffer bbuf = new OutBuffer();
@@ -95,13 +94,19 @@ int main(string[] argv) {
       eliminateRedundantStores(block);
       eliminateDeadCode(block);
 
-      block.print(bbuf);
-
       LiveRangeMap liveRanges = computeLiveRanges(block);
       RegMap regs = allocateRegs(block, liveRanges);
+      /*
       foreach (temp; regs.keys) {
         writefln("%s -> %s", temp.tmpNum,
                  to!string(regs[temp]));
+      }
+      */
+
+      if (outputFormat == OutputFormat.ir) {
+        block.print(bbuf);
+      } else {
+        codegenBlock(block, regs, bbuf);
       }
 
       if (block.successors[0]) {
@@ -112,9 +117,10 @@ int main(string[] argv) {
       }
     }
 
+    string introOutro[2] = codegenIntroOutro();
+    write(introOutro[0]);
     write(bbuf.toString());
-    return 0;
-  }
+    write(introOutro[1]);
 
-  return 0;
+    return 0;
 }

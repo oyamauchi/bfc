@@ -255,12 +255,14 @@ class Parser {
       case '[': {
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
         b.append(Opcode.JumpZ, [loadRes]);
+        b.ptrAtExit = ptrVal;
         return i;
       }
 
       case ']': {
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
         b.append(Opcode.JumpNZ, [loadRes]);
+        b.ptrAtExit = ptrVal;
         return i;
       }
 
