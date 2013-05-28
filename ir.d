@@ -20,6 +20,7 @@ enum Opcode {
   JumpNZ,  // If src is nonzero, jumps to jumpTarget
 
   Merge,   // Special opcode which captures predecessor variables
+  Nop,     // no-op
 }
 
 bool opcodeHasDest(Opcode op) {
@@ -39,6 +40,7 @@ ulong opcodeSourceCount(Opcode op) {
   switch (op) {
   case Opcode.Getchar:
   case Opcode.Merge: // XXX
+  case Opcode.Nop:
     return 0;
   case Opcode.Add:
   case Opcode.Sub:
@@ -60,6 +62,7 @@ string opcodeName(Opcode op) {
   case Opcode.JumpZ:   return "JumpZ";
   case Opcode.JumpNZ:  return "JumpNZ";
   case Opcode.Merge:   return "Merge";
+  case Opcode.Nop:     return "Nop";
   }
 }
 

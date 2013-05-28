@@ -2,6 +2,8 @@
 import codegen;
 import ir;
 import regalloc;
+import opt.dce;
+import opt.memelim;
 
 import std.container;
 import std.conv;
@@ -88,15 +90,20 @@ int main(string[] argv) {
         continue;
       }
       visited[block.id] = true;
-      block.print(bbuf);
 
+      eliminateRedundantLoads(block);
+      eliminateRedundantStores(block);
+      eliminateDeadCode(block);
+
+      block.print(bbuf);
+      /*
       LiveRangeMap liveRanges = computeLiveRanges(block);
       RegMap regs = allocateRegs(block, liveRanges);
       foreach (temp; regs.keys) {
         writefln("%s -> %s", temp.tmpNum,
                  to!string(regs[temp]));
       }
-
+      */
       if (block.successors[0]) {
         queue.insertBack(block.successors[0]);
       }

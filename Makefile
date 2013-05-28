@@ -1,6 +1,6 @@
 
 ROOT_FILES     := $(wildcard *.d)
-OPTIMIZE_FILES := $(wildcard optimize/*.d)
+OPTIMIZE_FILES := $(wildcard opt/*.d)
 ALL_FILES      := $(ROOT_FILES) $(OPTIMIZE_FILES)
 
 INTERP_FILES   := interp.d
