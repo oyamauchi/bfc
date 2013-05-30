@@ -71,28 +71,61 @@ string opcodeName(Opcode op) {
 
 
 struct Temp {
-  static int globalTmpNum = 0;
-  static Temp* newTemp() {
-    return new Temp(false, globalTmpNum++);
+  private static int globalTempNum = 0;
+  static Temp* newByteTemp() {
+    Temp* t = new Temp(false, false);
+    t.tempNum = globalTempNum++;
+    return t;
   }
 
-  static Temp* newConst(int val) {
-    return new Temp(true, val);
+  static Temp* newWordTemp() {
+    Temp* t = new Temp(false, true);
+    t.tempNum = globalTempNum++;
+    return t;
   }
 
-  this(bool c, int v) {
-    isConst = c;
-    tmpNum = v;
+  static Temp* newConstByte(ubyte val) {
+    Temp* t = new Temp(true, false);
+    t.byteConstVal = val;
+    return t;
+  }
+
+  static Temp* newConstWord(ulong val) {
+    Temp* t = new Temp(true, true);
+    t.wordConstVal = val;
+    return t;
   }
 
   bool isConst;
-  int tmpNum;
+  bool isWord;  // size
+  union {
+    ubyte byteConstVal;
+    ulong wordConstVal;
+    int tempNum;
+  }
 }
 
 struct Instr {
   Opcode opcode;
   Temp* dest;
   Temp* srcs[];
+
+  bool computeResultIsWord() {
+    switch (opcode) {
+    case Opcode.Load: case Opcode.Store: case Opcode.Getchar:
+      return false;
+    case Opcode.Merge:
+      return true;
+    case Opcode.Add: case Opcode.Sub:
+      assert(srcs.length == 2);
+      assert(srcs[0].isWord == srcs[1].isWord);
+      return srcs[0].isWord;
+
+    default:
+      assert(!opcodeHasDest(opcode));
+    }
+    assert(false);
+  }
 }
 
 class BasicBlock {
@@ -107,8 +140,12 @@ class BasicBlock {
   }
 
   Temp* append(Opcode op, Temp* srcs[]) {
-    Temp* dst = (opcodeHasDest(op) ? Temp.newTemp() : null);
-    Instr i = Instr(op, dst, srcs);
+    Instr i = Instr(op, null, srcs);
+    Temp* dst = null;
+    if (opcodeHasDest(op)) {
+      dst = (i.computeResultIsWord() ? Temp.newWordTemp() : Temp.newByteTemp());
+    }
+    i.dest = dst;
     instrs.insertBack(i);
     return dst;
   }
@@ -123,16 +160,20 @@ class BasicBlock {
     foreach (Instr instr; instrs) {
       buf.write("    ");
       if (opcodeHasDest(instr.opcode)) {
-        buf.write(format("t%d = ", instr.dest.tmpNum));
+        buf.write(format("t%d%s = ", instr.dest.tempNum, instr.dest.isWord ? "L" : ""));
       }
 
       buf.write(format("%s", opcodeName(instr.opcode)));
 
       foreach (ulong i; 0..opcodeSourceCount(instr.opcode)) {
         if (instr.srcs[i].isConst) {
-          buf.write(format(" %d", instr.srcs[i].tmpNum));
+          if (instr.srcs[i].isWord) {
+            buf.write(format(" %dL", instr.srcs[i].wordConstVal));
+          } else {
+            buf.write(format(" %d", instr.srcs[i].byteConstVal));
+          }
         } else {
-          buf.write(format(" t%d", instr.srcs[i].tmpNum));
+          buf.write(format(" t%d", instr.srcs[i].tempNum));
         }
       }
 
@@ -218,26 +259,26 @@ class Parser {
 
   private ulong parseBasicBlock(BasicBlock b, ulong start) {
     auto ptrVal = (start == 0
-                   ? Temp.newConst(0)
+                   ? Temp.newConstWord(0)
                    : b.append(Opcode.Merge, []));
 
     foreach (ulong i; start..source.length) {
       switch (source[i]) {
       case '<':
-        ptrVal = b.append(Opcode.Sub, [ptrVal, Temp.newConst(1)]);
+        ptrVal = b.append(Opcode.Sub, [ptrVal, Temp.newConstWord(1)]);
         break;
       case '>':
-        ptrVal = b.append(Opcode.Add, [ptrVal, Temp.newConst(1)]);
+        ptrVal = b.append(Opcode.Add, [ptrVal, Temp.newConstWord(1)]);
         break;
       case '-': {
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
-        auto subRes  = b.append(Opcode.Sub, [loadRes, Temp.newConst(1)]);
+        auto subRes  = b.append(Opcode.Sub, [loadRes, Temp.newConstByte(1)]);
         b.append(Opcode.Store, [ptrVal, subRes]);
         break;
       }
       case '+': {
         auto loadRes = b.append(Opcode.Load, [ptrVal]);
-        auto addRes  = b.append(Opcode.Add, [loadRes, Temp.newConst(1)]);
+        auto addRes  = b.append(Opcode.Add, [loadRes, Temp.newConstByte(1)]);
         b.append(Opcode.Store, [ptrVal, addRes]);
         break;
       }

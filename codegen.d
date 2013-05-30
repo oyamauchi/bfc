@@ -53,15 +53,26 @@ string[2] codegenIntroOutro() {
 void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
   auto codegenTemp = delegate(Temp* t) {
     if (t.isConst) {
-      return format("$%d", t.tmpNum);
+      if (t.isWord) {
+        return format("$%d", t.wordConstVal);
+      } else {
+        return format("$%d", t.byteConstVal);
+      }
+    } else {
+      if (t.isWord) {
+        return format("%%%s", to!string(regMap[t]));
+      } else {
+        return format("%%%s", byteRegName(regMap[t]));
+      }
     }
-    return "%" ~ to!string(regMap[t]);
   };
-  auto codegenTempByte = delegate(Temp* t) {
+
+  auto codegenAddress = delegate(Temp *t) {
     if (t.isConst) {
-      return format("$%d", t.tmpNum);
+      return format("%d(%%%s)", t.wordConstVal, memBaseReg);
+    } else {
+      return format("(%%%s, %%%s)", to!string(regMap[t]), memBaseReg);
     }
-    return byteRegName(regMap[t]);
   };
 
   // Used for the short jump after the call to getchar
@@ -73,59 +84,56 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
     Instr inst = b.instrs[idx];
     final switch (inst.opcode) {
       case Opcode.Load:
+        assert(inst.srcs[0].isWord);
+        assert(!inst.dest.isWord);
         auto destReg = regMap[inst.dest];
-        if (inst.srcs[0].isConst) {
-          buf.write(format("  movzbq %d(%%%s), %%%s\n",
-                           inst.srcs[0].tmpNum, memBaseReg,
-                           to!string(destReg)));
-        } else {
-          buf.write(format("  movzbq (%s,%%%s), %%%s\n",
-                           codegenTemp(inst.srcs[0]), memBaseReg,
-                           to!string(destReg)));
-        }
+        buf.write(format("  movb %s, %s\n",
+                         codegenAddress(inst.srcs[0]),
+                         codegenTemp(inst.dest)));
         break;
 
       case Opcode.Store:
-        if (inst.srcs[0].isConst) {
-          buf.write(format("  movb %s, %d(%%%s)\n",
-                           codegenTempByte(inst.srcs[1]),
-                           inst.srcs[0].tmpNum, memBaseReg));
-        } else {
-          buf.write(format("  movb %s, (%s,%%%s)\n",
-                           codegenTempByte(inst.srcs[1]),
-                           codegenTemp(inst.srcs[0]), memBaseReg));
-        }
+        assert(inst.srcs[0].isWord);
+        assert(!inst.srcs[1].isWord);
+        buf.write(format("  movb %s, %s\n",
+                         codegenTemp(inst.srcs[1]),
+                         codegenAddress(inst.srcs[0])));
         break;
 
       case Opcode.Add:
         if (inst.srcs[0].isConst && inst.srcs[1].isConst) {
-          buf.write(format("  movq $%d, %s\n",
-                           inst.srcs[0].tmpNum + inst.srcs[1].tmpNum,
+          string op = (inst.dest.isWord ? "movq" : "movb");
+          // sketchtown size treatment here
+          buf.write(format("  %s $%d, %s\n", op,
+                           inst.srcs[0].wordConstVal + inst.srcs[1].wordConstVal,
                            codegenTemp(inst.dest)));
         } else if (inst.srcs[1].isConst) {
           // XXX this doesn't deal with the reverse case
           auto destReg = regMap[inst.dest];
           auto srcReg = regMap[inst.srcs[0]];
           if (destReg == srcReg) {
-            buf.write(format("  addq %s, %s\n",
+            string op = (inst.dest.isWord ? "addq" : "addb");
+            buf.write(format("  %s %s, %s\n", op,
                              codegenTemp(inst.srcs[1]),
                              codegenTemp(inst.dest)));
           } else {
+            assert(false);
             buf.write(format("  leaq %s(%s), %s\n",
                              codegenTemp(inst.srcs[1]),
                              codegenTemp(inst.srcs[0]),
                              codegenTemp(inst.dest)));
           }
         } else {
+          assert(false);
           auto destReg = regMap[inst.dest];
           auto src0Reg = regMap[inst.srcs[0]];
           auto src1Reg = regMap[inst.srcs[1]];
           if (destReg == src0Reg) {
-            buf.write(format("  addq %s, %s\n",
+            buf.write(format("  addb %s, %s\n",
                              codegenTemp(inst.srcs[1]),
                              codegenTemp(inst.dest)));
           } else if (destReg == src1Reg) {
-            buf.write(format("  addq %s, %s\n",
+            buf.write(format("  addb %s, %s\n",
                              codegenTemp(inst.srcs[0]),
                              codegenTemp(inst.dest)));
           } else {
@@ -143,7 +151,8 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
         auto destReg = regMap[inst.dest];
         auto srcReg = regMap[inst.srcs[0]];
         if (destReg == srcReg) {
-          buf.write(format("  subq %s, %s\n",
+          string op = (inst.dest.isWord ? "subq" : "subb");
+          buf.write(format("  %s %s, %s\n", op,
                            codegenTemp(inst.srcs[1]),
                            codegenTemp(inst.dest)));
         } else {
@@ -153,7 +162,7 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
 
       case Opcode.Putchar:
         // We're gonna need some worrying about register-saving here
-        buf.write(format("  movq %s, %%rdi\n",
+        buf.write(format("  movzbl %s, %%edi\n",
                          codegenTemp(inst.srcs[0])));
         buf.write("  call _putchar\n");
         break;
@@ -161,15 +170,15 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
         buf.write("  call _getchar\n");
         buf.write("  cmpl $0xffffffff, %eax\n");
         buf.write(format("  je LS%d\n", shortLabel));
-        buf.write(format("  movb %%al, %s\n", codegenTempByte(inst.dest)));
+        buf.write(format("  movb %%al, %s\n", codegenTemp(inst.dest)));
         buf.write(format("LS%d:\n", shortLabel));
         shortLabel++;
         break;
       case Opcode.JumpZ:
       case Opcode.JumpNZ:
         string op = (inst.opcode == Opcode.JumpZ ? "jz" : "jnz");
-        buf.write(format("  movq %s, %%r10\n", codegenTemp(inst.srcs[0])));
-        buf.write(       "  test %r10, %r10\n");
+        buf.write(format("  movb %s, %%r10b\n", codegenTemp(inst.srcs[0])));
+        buf.write(       "  test %r10b, %r10b\n");
         buf.write(format("  movq %s, %%r10\n", codegenTemp(b.ptrAtExit)));
         buf.write(format("  %s L%d\n", op, b.successors[1].id));
         buf.write(format("  jmp L%d\n", b.successors[0].id));

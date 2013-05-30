@@ -37,23 +37,23 @@ void eliminateRedundantLoads(BasicBlock b) {
     if (inst.opcode == Opcode.Store) {
       auto addr = inst.srcs[0];
       if (addr.isConst) {
-        savedConstStores[addr.tmpNum] = inst.srcs[1];
+        savedConstStores[addr.wordConstVal] = inst.srcs[1];
       } else {
         savedConstStores.clear();
-        savedVarStores[addr.tmpNum] = inst.srcs[1];
+        savedVarStores[addr.tempNum] = inst.srcs[1];
       }
     }
 
     if (inst.opcode == Opcode.Load) {
       auto addr = inst.srcs[0];
       if (addr.isConst) {
-        auto replacement = addr.tmpNum in savedConstStores;
+        auto replacement = addr.wordConstVal in savedConstStores;
         if (replacement) {
           replaceMap[inst.dest] = *replacement;
           b.nopOut(i);
         }
       } else {
-        auto replacement = addr.tmpNum in savedVarStores;
+        auto replacement = addr.tempNum in savedVarStores;
         if (replacement) {
           replaceMap[inst.dest] = *replacement;
           b.nopOut(i);
@@ -80,19 +80,19 @@ void eliminateRedundantStores(BasicBlock b) {
     if (inst.opcode == Opcode.Store) {
       if (inst.srcs[0].isConst) {
         // Is this going to get overwritten later?
-        if (inst.srcs[0].tmpNum in overwriteConstMap) {
+        if (inst.srcs[0].wordConstVal in overwriteConstMap) {
           // Eliminate this one.
           b.nopOut(i);
         } else {
           // This one will take over.
-          overwriteConstMap[inst.srcs[0].tmpNum] = true;
+          overwriteConstMap[inst.srcs[0].wordConstVal] = true;
         }
       } else {
-        if (inst.srcs[0].tmpNum in overwriteVarMap) {
+        if (inst.srcs[0].tempNum in overwriteVarMap) {
           b.nopOut(i);
         } else {
           overwriteConstMap.clear();
-          overwriteVarMap[inst.srcs[0].tmpNum] = true;
+          overwriteVarMap[inst.srcs[0].tempNum] = true;
         }
       }
     }
@@ -100,9 +100,9 @@ void eliminateRedundantStores(BasicBlock b) {
     if (inst.opcode == Opcode.Load) {
       // Going backward from here, stores to this address are no longer redundant.
       if (inst.srcs[0].isConst) {
-        overwriteConstMap.remove(inst.srcs[0].tmpNum);
+        overwriteConstMap.remove(inst.srcs[0].wordConstVal);
       } else {
-        overwriteVarMap.remove(inst.srcs[0].tmpNum);
+        overwriteVarMap.remove(inst.srcs[0].tempNum);
       }
     }
   }

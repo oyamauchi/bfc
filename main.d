@@ -104,7 +104,7 @@ int main(string[] argv) {
 
       if (outputFormat == OutputFormat.ir) {
         foreach (temp; regs.keys) {
-          writefln("%s -> %s", temp.tmpNum,
+          writefln("%s -> %s", temp.tempNum,
                    to!string(regs[temp]));
         }
         block.print(bbuf);

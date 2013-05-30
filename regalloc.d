@@ -122,18 +122,18 @@ RegMap allocateRegs(BasicBlock b, LiveRangeMap liveRanges) {
 
 string byteRegName(Reg r) {
   final switch (r) {
-    case Reg.rax: return "%al";
-    case Reg.rbx: return "%bl";
-    case Reg.rcx: return "%cl";
-    case Reg.rdx: return "%dl";
-    case Reg.rsi: return "%sil";
-    case Reg.rdi: return "%dil";
-    case Reg.r8:  return "%r8b";
-    case Reg.r9:  return "%r9b";
-    case Reg.r11: return "%r11b";
-    case Reg.r12: return "%r12b";
-    case Reg.r13: return "%r13b";
-    case Reg.r14: return "%r14b";
+    case Reg.rax: return "al";
+    case Reg.rbx: return "bl";
+    case Reg.rcx: return "cl";
+    case Reg.rdx: return "dl";
+    case Reg.rsi: return "sil";
+    case Reg.rdi: return "dil";
+    case Reg.r8:  return "r8b";
+    case Reg.r9:  return "r9b";
+    case Reg.r11: return "r11b";
+    case Reg.r12: return "r12b";
+    case Reg.r13: return "r13b";
+    case Reg.r14: return "r14b";
   }
 }
 
