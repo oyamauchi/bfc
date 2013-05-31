@@ -191,9 +191,10 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
       case Opcode.JumpZ:
       case Opcode.JumpNZ:
         string op = (inst.opcode == Opcode.JumpZ ? "jz" : "jnz");
-        buf.write(format("  movb %s, %%r10b\n", codegenTemp(inst.srcs[0])));
-        buf.write(       "  test %r10b, %r10b\n");
         buf.write(format("  movq %s, %%r10\n", codegenTemp(b.ptrAtExit)));
+
+        string operand = codegenTemp(inst.srcs[0]);
+        buf.write(format("  test %s, %s\n", operand, operand));
         buf.write(format("  %s L%d\n", op, b.successors[1].id));
         buf.write(format("  jmp L%d\n", b.successors[0].id));
         break;
