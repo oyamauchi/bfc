@@ -117,11 +117,19 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
                              codegenTemp(inst.srcs[1]),
                              codegenTemp(inst.dest)));
           } else {
-            assert(false);
-            buf.write(format("  leaq %s(%s), %s\n",
-                             codegenTemp(inst.srcs[1]),
-                             codegenTemp(inst.srcs[0]),
-                             codegenTemp(inst.dest)));
+            if (inst.dest.isWord) {
+              buf.write(format("  leaq %d(%s), %s\n",
+                               inst.srcs[1].wordConstVal,
+                               codegenTemp(inst.srcs[0]),
+                               codegenTemp(inst.dest)));
+            } else {
+              buf.write(format("  movb %s, %s\n",
+                               codegenTemp(inst.srcs[0]),
+                               codegenTemp(inst.dest)));
+              buf.write(format("  addb %s, %s\n",
+                               codegenTemp(inst.srcs[1]),
+                               codegenTemp(inst.dest)));
+            }
           }
         } else {
           assert(false);
@@ -150,13 +158,19 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
         assert(!inst.srcs[0].isConst);
         auto destReg = regMap[inst.dest.tempNum];
         auto srcReg = regMap[inst.srcs[0].tempNum];
+        string op = (inst.dest.isWord ? "subq" : "subb");
         if (destReg == srcReg) {
-          string op = (inst.dest.isWord ? "subq" : "subb");
           buf.write(format("  %s %s, %s\n", op,
                            codegenTemp(inst.srcs[1]),
                            codegenTemp(inst.dest)));
         } else {
-          assert(false);
+          string movOp = (inst.dest.isWord ? "movq" : "movb");
+          buf.write(format("  %s %s, %s\n", movOp,
+                           codegenTemp(inst.srcs[0]),
+                           codegenTemp(inst.dest)));
+          buf.write(format("  %s %s, %s\n", op,
+                           codegenTemp(inst.srcs[1]),
+                           codegenTemp(inst.dest)));
         }
         break;
 

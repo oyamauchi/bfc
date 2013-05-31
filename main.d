@@ -2,6 +2,7 @@
 import codegen;
 import ir;
 import regalloc;
+import opt.constprop;
 import opt.dce;
 import opt.memelim;
 
@@ -96,6 +97,7 @@ int main(string[] argv) {
       if (!noOpts) {
         eliminateRedundantLoads(block);
         eliminateRedundantStores(block);
+        optimizeConstants(block);
         eliminateDeadCode(block);
       }
 
@@ -103,10 +105,6 @@ int main(string[] argv) {
       RegMap regs = allocateRegs(block, liveRanges);
 
       if (outputFormat == OutputFormat.ir) {
-        foreach (temp; regs.keys) {
-          writefln("%s -> %s", temp.tempNum,
-                   to!string(regs[temp]));
-        }
         block.print(bbuf);
       } else {
         codegenBlock(block, regs, bbuf);
@@ -121,9 +119,13 @@ int main(string[] argv) {
     }
 
     string introOutro[2] = codegenIntroOutro();
-    write(introOutro[0]);
+    if (outputFormat == OutputFormat.x86) {
+      write(introOutro[0]);
+    }
     write(bbuf.toString());
-    write(introOutro[1]);
+    if (outputFormat == OutputFormat.x86) {
+      write(introOutro[1]);
+    }
 
     return 0;
 }
