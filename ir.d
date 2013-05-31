@@ -69,46 +69,62 @@ string opcodeName(Opcode op) {
 // Think of this IR as a graph. Instructions are nodes, annotated with an
 // opcode. Temps are edges, the means by which values flow between instructions.
 
-
-struct Temp {
+class Temp {
   private static int globalTempNum = 0;
-  static Temp* newByteTemp() {
-    Temp* t = new Temp(false, false);
+  static Temp newByteTemp() {
+    Temp t = new Temp();
+    t.isConst = false;
+    t.isWord = false;
     t.tempNum = globalTempNum++;
     return t;
   }
 
-  static Temp* newWordTemp() {
-    Temp* t = new Temp(false, true);
+  static Temp newWordTemp() {
+    Temp t = new Temp();
+    t.isConst = false;
+    t.isWord = true;
     t.tempNum = globalTempNum++;
     return t;
   }
 
-  static Temp* newConstByte(ubyte val) {
-    Temp* t = new Temp(true, false);
+  static Temp newConstByte(byte val) {
+    Temp t = new Temp();
+    t.isConst = true;
+    t.isWord = false;
     t.byteConstVal = val;
     return t;
   }
 
-  static Temp* newConstWord(ulong val) {
-    Temp* t = new Temp(true, true);
+  static Temp newConstWord(long val) {
+    Temp t = new Temp();
+    t.isConst = true;
+    t.isWord = true;
     t.wordConstVal = val;
     return t;
   }
 
+  // The instruction that produced this temp.
+  Instr inst;
+
   bool isConst;
   bool isWord;  // size
   union {
-    ubyte byteConstVal;
-    ulong wordConstVal;
+    byte byteConstVal;
+    long wordConstVal;
     int tempNum;
   }
 }
 
-struct Instr {
+class Instr {
   Opcode opcode;
-  Temp* dest;
-  Temp* srcs[];
+  Temp dest;
+  Temp srcs[];
+
+  this(Opcode opcode, Temp dest, Temp srcs[]) {
+    this.opcode = opcode;
+    this.dest = dest;
+    this.srcs = srcs;
+  }
 
   bool computeResultIsWord() {
     switch (opcode) {
@@ -131,7 +147,7 @@ struct Instr {
 class BasicBlock {
   ulong id;
   Array!Instr instrs;
-  Temp* ptrAtExit;
+  Temp ptrAtExit;
 
   BasicBlock successors[2];
 
@@ -139,20 +155,22 @@ class BasicBlock {
     this.id = id;
   }
 
-  Temp* append(Opcode op, Temp* srcs[]) {
-    Instr i = Instr(op, null, srcs);
-    Temp* dst = null;
+  Temp append(Opcode op, Temp srcs[]) {
+    Instr i = new Instr(op, null, srcs);
+    Temp dest = null;
     if (opcodeHasDest(op)) {
-      dst = (i.computeResultIsWord() ? Temp.newWordTemp() : Temp.newByteTemp());
+      dest = (i.computeResultIsWord() ? Temp.newWordTemp() : Temp.newByteTemp());
+      dest.inst = i;
     }
-    i.dest = dst;
+    i.dest = dest;
     instrs.insertBack(i);
-    return dst;
+    return dest;
   }
 
   void nopOut(ulong offset) {
-    Instr newInst = Instr(Opcode.Nop, null, []);
-    instrs[offset] = newInst;
+    instrs[offset].opcode = Opcode.Nop;
+    instrs[offset].dest = null;
+    instrs[offset].srcs = [];
   }
 
   void print(OutBuffer buf) {

@@ -18,16 +18,16 @@ import ir;
  * Replace the dests of loads with the src to the corresponding store, if known.
  */
 void eliminateRedundantLoads(BasicBlock b) {
-  Temp*[Temp*] replaceMap;
+  Temp[typeof(Temp.tempNum)] replaceMap;
   // Pretty sure these could be the same map but I'm not good enough at D
-  Temp*[ulong] savedConstStores; // maps address to value
-  Temp*[ulong] savedVarStores; // maps temp number to value
+  Temp[typeof(Temp.wordConstVal)] savedConstStores; // maps address to value
+  Temp[typeof(Temp.tempNum)] savedVarStores; // maps temp number to value
 
   foreach (i; 0..b.instrs.length) {
     auto inst = b.instrs[i];
     // Now just do all the replacements.
     foreach (j; 0..inst.srcs.length) {
-      auto mapEntry = inst.srcs[j] in replaceMap;
+      auto mapEntry = inst.srcs[j].tempNum in replaceMap;
       if (mapEntry) {
         inst.srcs[j] = *mapEntry;
       }
@@ -49,13 +49,13 @@ void eliminateRedundantLoads(BasicBlock b) {
       if (addr.isConst) {
         auto replacement = addr.wordConstVal in savedConstStores;
         if (replacement) {
-          replaceMap[inst.dest] = *replacement;
+          replaceMap[inst.dest.tempNum] = *replacement;
           b.nopOut(i);
         }
       } else {
         auto replacement = addr.tempNum in savedVarStores;
         if (replacement) {
-          replaceMap[inst.dest] = *replacement;
+          replaceMap[inst.dest.tempNum] = *replacement;
           b.nopOut(i);
         }
       }
@@ -70,9 +70,9 @@ void eliminateRedundantLoads(BasicBlock b) {
  */
 void eliminateRedundantStores(BasicBlock b) {
   // Maps memory address to temp later stored there.
-  bool[ulong] overwriteConstMap;
+  bool[typeof(Temp.wordConstVal)] overwriteConstMap;
   // Maps temp number to temp later stored there.
-  bool[ulong] overwriteVarMap;
+  bool[typeof(Temp.tempNum)] overwriteVarMap;
 
   // Overflow, jesus.
   for (ulong i = b.instrs.length - 1; i < b.instrs.length; --i) {

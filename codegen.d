@@ -51,7 +51,7 @@ string[2] codegenIntroOutro() {
 }
 
 void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
-  auto codegenTemp = delegate(Temp* t) {
+  auto codegenTemp = delegate(Temp t) {
     if (t.isConst) {
       if (t.isWord) {
         return format("$%d", t.wordConstVal);
@@ -60,18 +60,18 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
       }
     } else {
       if (t.isWord) {
-        return format("%%%s", to!string(regMap[t]));
+        return format("%%%s", to!string(regMap[t.tempNum]));
       } else {
-        return format("%%%s", byteRegName(regMap[t]));
+        return format("%%%s", byteRegName(regMap[t.tempNum]));
       }
     }
   };
 
-  auto codegenAddress = delegate(Temp *t) {
+  auto codegenAddress = delegate(Temp t) {
     if (t.isConst) {
       return format("%d(%%%s)", t.wordConstVal, memBaseReg);
     } else {
-      return format("(%%%s, %%%s)", to!string(regMap[t]), memBaseReg);
+      return format("(%%%s, %%%s)", to!string(regMap[t.tempNum]), memBaseReg);
     }
   };
 
@@ -86,7 +86,7 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
       case Opcode.Load:
         assert(inst.srcs[0].isWord);
         assert(!inst.dest.isWord);
-        auto destReg = regMap[inst.dest];
+        auto destReg = regMap[inst.dest.tempNum];
         buf.write(format("  movb %s, %s\n",
                          codegenAddress(inst.srcs[0]),
                          codegenTemp(inst.dest)));
@@ -109,8 +109,8 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
                            codegenTemp(inst.dest)));
         } else if (inst.srcs[1].isConst) {
           // XXX this doesn't deal with the reverse case
-          auto destReg = regMap[inst.dest];
-          auto srcReg = regMap[inst.srcs[0]];
+          auto destReg = regMap[inst.dest.tempNum];
+          auto srcReg = regMap[inst.srcs[0].tempNum];
           if (destReg == srcReg) {
             string op = (inst.dest.isWord ? "addq" : "addb");
             buf.write(format("  %s %s, %s\n", op,
@@ -125,9 +125,9 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
           }
         } else {
           assert(false);
-          auto destReg = regMap[inst.dest];
-          auto src0Reg = regMap[inst.srcs[0]];
-          auto src1Reg = regMap[inst.srcs[1]];
+          auto destReg = regMap[inst.dest.tempNum];
+          auto src0Reg = regMap[inst.srcs[0].tempNum];
+          auto src1Reg = regMap[inst.srcs[1].tempNum];
           if (destReg == src0Reg) {
             buf.write(format("  addb %s, %s\n",
                              codegenTemp(inst.srcs[1]),
@@ -148,8 +148,8 @@ void codegenBlock(BasicBlock b, RegMap regMap, ref OutBuffer buf) {
       case Opcode.Sub:
         assert(inst.srcs[1].isConst);
         assert(!inst.srcs[0].isConst);
-        auto destReg = regMap[inst.dest];
-        auto srcReg = regMap[inst.srcs[0]];
+        auto destReg = regMap[inst.dest.tempNum];
+        auto srcReg = regMap[inst.srcs[0].tempNum];
         if (destReg == srcReg) {
           string op = (inst.dest.isWord ? "subq" : "subb");
           buf.write(format("  %s %s, %s\n", op,

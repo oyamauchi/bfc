@@ -29,8 +29,8 @@ enum Reg {
 // A LiveRange's start is the instruction where it's first assigned. The end is
 // the last instruction where it's used.
 alias long[2] LiveRange;
-alias LiveRange[Temp*] LiveRangeMap;
-alias Reg[Temp*] RegMap;
+alias LiveRange[typeof(Temp.tempNum)] LiveRangeMap;
+alias Reg[typeof(Temp.tempNum)] RegMap;
 
 LiveRangeMap computeLiveRanges(BasicBlock b) {
   LiveRangeMap map;
@@ -40,9 +40,9 @@ LiveRangeMap computeLiveRanges(BasicBlock b) {
     // appearance as a dest, and therefore the start of its live range.
     auto inst = b.instrs[i];
     if (opcodeHasDest(inst.opcode)) {
-      assert(!(inst.dest in map));
       assert(!inst.dest.isConst);
-      map[inst.dest] = [cast(long) i, -1];
+      assert(!(inst.dest.tempNum in map));
+      map[inst.dest.tempNum] = [cast(long) i, -1];
     }
 
     foreach (src; inst.srcs) {
@@ -50,12 +50,12 @@ LiveRangeMap computeLiveRanges(BasicBlock b) {
         continue;
       }
 
-      map[src][1] = cast(long) i;
+      map[src.tempNum][1] = cast(long) i;
     }
   }
 
   if (b.ptrAtExit && !b.ptrAtExit.isConst) {
-    map[b.ptrAtExit][1] = b.instrs.length;
+    map[b.ptrAtExit.tempNum][1] = b.instrs.length;
   }
 
   return map;
@@ -104,15 +104,15 @@ RegMap allocateRegs(BasicBlock b, LiveRangeMap liveRanges) {
       if (src.isConst) {
         continue;
       }
-      if (liveRanges[src][1] == i) {
-        allocated[map[src]] = false;
+      if (liveRanges[src.tempNum][1] == i) {
+        allocated[map[src.tempNum]] = false;
       }
     }
 
     if (opcodeHasDest(b.instrs[i].opcode)) {
       auto reg = pick();
       assert(!allocated[reg]);
-      map[b.instrs[i].dest] = reg;
+      map[b.instrs[i].dest.tempNum] = reg;
       allocated[reg] = true;
     }
   }
