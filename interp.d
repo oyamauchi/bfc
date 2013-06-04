@@ -12,13 +12,10 @@
 
 import std.file;
 import std.stdio;
-import std.c.stdio;
 
 void exec_string(string code) {
   char memory[30000];
-  foreach (int i; 0..memory.length) {
-    memory[i] = 0;
-  }
+  memory[] = 0;
 
   ulong idx = 0;
   ulong ip = 0;
@@ -45,6 +42,10 @@ void exec_string(string code) {
       if (!memory[idx]) {
         int brack_count = 1;
         do {
+          if (ip == code.length - 1) {
+            stderr.writeln("Too many opening brackets");
+            return;
+          }
           ip++;
           if (code[ip] == '[') {
             brack_count++;
@@ -59,6 +60,10 @@ void exec_string(string code) {
       if (memory[idx]) {
         int brack_count = 1;
         do {
+          if (ip == 0) {
+            stderr.writeln("Too many closing brackets");
+            return;
+          }
           ip--;
           if (code[ip] == ']') {
             brack_count++;

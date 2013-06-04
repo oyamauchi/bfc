@@ -78,54 +78,60 @@ int main(string[] argv) {
   }
 
   Parser p = new Parser(source);
-  auto root = p.parse();
+  BasicBlock root;
+  try {
+    root = p.parse();
+  } catch (Exception e) {
+    stderr.writeln(e.msg);
+    return 1;
+  }
 
-    DList!BasicBlock queue;
-    bool[ulong] visited;
-    OutBuffer bbuf = new OutBuffer();
-    queue.insertBack(root);
+  DList!BasicBlock queue;
+  bool[ulong] visited;
+  OutBuffer bbuf = new OutBuffer();
+  queue.insertBack(root);
 
-    while (!queue.empty) {
-      auto block = queue.front();
-      queue.removeFront();
+  while (!queue.empty) {
+    auto block = queue.front();
+    queue.removeFront();
 
-      if (block.id in visited) {
-        continue;
-      }
-      visited[block.id] = true;
+    if (block.id in visited) {
+      continue;
+    }
+    visited[block.id] = true;
 
-      if (!noOpts) {
-        eliminateRedundantLoads(block);
-        eliminateRedundantStores(block);
-        optimizeConstants(block);
-        eliminateDeadCode(block);
-      }
-
-      LiveRangeMap liveRanges = computeLiveRanges(block);
-      RegMap regs = allocateRegs(block, liveRanges);
-
-      if (outputFormat == OutputFormat.ir) {
-        block.print(bbuf);
-      } else {
-        codegenBlock(block, regs, bbuf);
-      }
-
-      if (block.successors[0]) {
-        queue.insertBack(block.successors[0]);
-      }
-      if (block.successors[1]) {
-        queue.insertBack(block.successors[1]);
-      }
+    if (!noOpts) {
+      eliminateRedundantLoads(block);
+      eliminateRedundantStores(block);
+      optimizeConstants(block);
+      eliminateDeadCode(block);
     }
 
-    string introOutro[2] = codegenIntroOutro();
-    if (outputFormat == OutputFormat.x86) {
-      write(introOutro[0]);
-    }
-    write(bbuf.toString());
-    if (outputFormat == OutputFormat.x86) {
-      write(introOutro[1]);
+    LiveRangeMap liveRanges = computeLiveRanges(block);
+    RegMap regs = allocateRegs(block, liveRanges);
+
+    if (outputFormat == OutputFormat.ir) {
+      block.print(bbuf);
+    } else {
+      codegenBlock(block, regs, bbuf);
     }
 
-    return 0;
+    if (block.successors[0]) {
+      queue.insertBack(block.successors[0]);
+    }
+    if (block.successors[1]) {
+      queue.insertBack(block.successors[1]);
+    }
+  }
+
+  string introOutro[2] = codegenIntroOutro();
+  if (outputFormat == OutputFormat.x86) {
+    write(introOutro[0]);
+  }
+  write(bbuf.toString());
+  if (outputFormat == OutputFormat.x86) {
+    write(introOutro[1]);
+  }
+
+  return 0;
 }

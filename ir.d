@@ -220,14 +220,21 @@ class Parser {
 
   this(string source) {
     this.source = source;
+  }
 
+  BasicBlock parse() {
+    // First compute a mapping from bracket-index to target-index. The
+    // keys always point to brackets, and the values always point to
+    // positions immediately after brackets.
+    ulong[ulong] jumpTargets;
     SList!ulong jumpStack;
     foreach (i; 0..source.length) {
       if (source[i] == '[') {
         jumpStack.insertFront(i);
       } else if (source[i] == ']') {
-        // Unbalanced brackets if this fires. TODO: error, not assert
-        assert(!jumpStack.empty);
+        if (jumpStack.empty) {
+          throw new Exception("Too many closing brackets");
+        }
 
         auto start = jumpStack.front();
         jumpStack.removeFront();
@@ -236,11 +243,10 @@ class Parser {
       }
     }
 
-    // Unbalanced brackets if this fires. TODO: error, not assert
-    assert(jumpStack.empty);
-  }
+    if (!jumpStack.empty) {
+      throw new Exception("Too many opening brackets");
+    }
 
-  BasicBlock parse() {
     ulong[BasicBlock] blockEnds;
 
     BasicBlock first = new BasicBlock(0);
